@@ -21,6 +21,25 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./WarehouseToken.sol";
 import "./DaiSwapping.sol";
 
+error WarehouseCrowdsale_non_zero_rate();
+error WarehouseCrowdsale_wallet_zero_address();
+error WarehouseCrowdsale_token_zero_address();
+error WarehouseCrowdsale_zero_goal();
+error WarehouseCrowdsale_opening_time_after_closing();
+error WarehouseCrowdsale_not_owner();
+error WarehouseCrowdsale_warehouse_not_open();
+error WarehouseCrowdsale_different_goal_reached();
+error WarehouseCrowdsale_beneficiary_zero_address();
+error WarehouseCrowdsale_wei_is_zero();
+error WarehouseCrowdsale_requested_wei_not_equal_received();
+error WarehouseCrowdsale_goal_exceeded();
+error WarehouseCrowdsale_cannot_send_leftover_eth();
+error WarehouseCrowdsale_dai_transfer_failed();
+error WarehouseCrowdsale_not_open();
+error WarehouseCrowdsale_dai_is_zero();
+error WarehouseCrowdsale_refund_not_allowed();
+error WarehouseCrowdsale_goal_not_reached();
+
 contract WarehouseCrowdsale is Context, ReentrancyGuard {
     using SafeERC20 for WarehouseToken;
 
@@ -57,7 +76,7 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
     Dai dai;
     // Instance of Uniswap router
     // It has been deployed on this address on ALL public networks
-    UniswapV2Router02 uniswapRouter = UniswapV2Router02(/*0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D*/0xeE567Fe1712Faf6149d80dA1E6934E354124CfE3);
+    UniswapV2Router02 uniswapRouter;
 
     // Amount of DAI raised
     uint256 private _daiRaised;
@@ -87,14 +106,15 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
         WarehouseToken __token,
         address daiAddress,
         uint __goal,
-        uint __closingTime
+        uint __closingTime,
+        address routerAddress
     ) {
-        require(__rate > 0, "Crowdsale: rate is 0");
-        require(__wallet != address(0), "Crowdsale: wallet is the zero address");
-        require(address(__token) != address(0), "Crowdsale: token is the zero address");
-        require(__goal > 0, "CustomRefundableCrowdsale: goal is 0");
-        // solhint-disable-next-line max-line-length
-        require(__closingTime > block.timestamp, "TimedCrowdsale: opening time is not before closing time");
+        if(!(__rate > 0)) revert WarehouseCrowdsale_non_zero_rate();
+        if(__wallet == address(0)) revert WarehouseCrowdsale_wallet_zero_address();
+        if(address(__token) == address(0)) revert WarehouseCrowdsale_token_zero_address();
+        if(!(__goal > 0)) revert WarehouseCrowdsale_zero_goal();
+        if(!(__closingTime > block.timestamp)) revert WarehouseCrowdsale_opening_time_after_closing();
+        
         _rate = __rate;
         _wallet = __wallet;
         _token = __token;
@@ -102,12 +122,13 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
         _closingTime = __closingTime;
         _goal = __goal;
         dai = Dai(daiAddress);
+        uniswapRouter = UniswapV2Router02(routerAddress);
 
         _owner = msg.sender;
     }
 
     modifier onlyOwner() {
-        require(msg.sender == _owner, 'WarehouseCrowdsale: Owner-only operation');
+        if(msg.sender != _owner) revert WarehouseCrowdsale_not_owner();
         _;
     }
 
@@ -227,13 +248,13 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
     function buyTokens(address beneficiary, uint256 daiAmountOut, uint256 deadline) public nonReentrant payable {
         // We manually do part of _preValidatePurchase() here since we can only
         // check daiAmount after the swap has happened.
-        require(isOpen(), "WarehouseCrowdsale: not open");
+        if(!isOpen()) revert WarehouseCrowdsale_warehouse_not_open();
         if (_siblings.length > 0) {
-            require(!siblingGoalReached(), "WarehouseCrowdsale: A different land use for this warehouse has reached its goal");
+            if(siblingGoalReached()) revert WarehouseCrowdsale_different_goal_reached();
         }
-        require(beneficiary != address(0), "Crowdsale: beneficiary is the zero address");
+        if(beneficiary == address(0)) revert WarehouseCrowdsale_beneficiary_zero_address();
         uint256 weiAmount = msg.value;
-        require(weiAmount != 0, "Crowdsale: weiAmount is 0");
+        if(weiAmount == 0) revert WarehouseCrowdsale_wei_is_zero();
 
         // Convert received Ether to DAI
         // https://docs.uniswap.org/protocol/V2/reference/smart-contracts/router-02#swapexactethfortokens
@@ -248,7 +269,7 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
             deadline
         );
         uint256 daiAmount = amounts[1];
-        require(daiAmount == daiAmountOut, "WarehouseCrowdsale: The requested amount of DAI does not match the received amount");
+        if(daiAmount != daiAmountOut) revert WarehouseCrowdsale_requested_wei_not_equal_received();
 
         // calculate token amount to be created
         uint256 tokens = _getTokenAmount(daiAmount);
@@ -256,7 +277,7 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
         // Update state and check _daiRaised (since we do not use
         // _preValidatePurchase() in this method)
         _daiRaised = _daiRaised + daiAmount;
-        require(_daiRaised <= _goal, "WarehouseCrowdsale: goal exceeded");
+        if(!(_daiRaised <= _goal)) revert WarehouseCrowdsale_goal_exceeded();
 
         _processPurchase(beneficiary, tokens, daiAmount);
 
@@ -264,7 +285,7 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
         // amounts[0] is the actual Eth amount that was used for the swap
         uint leftoverEth = msg.value - amounts[0];
         if (leftoverEth != 0) {
-            require(payable(_msgSender()).send(leftoverEth), "WarehouseCrowdsale: Could not send leftover Ether");
+            if(!payable(_msgSender()).send(leftoverEth)) revert WarehouseCrowdsale_cannot_send_leftover_eth();
         }
 
         emit TokensPurchased(_msgSender(), beneficiary, daiAmount, tokens);
@@ -278,7 +299,7 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
         _preValidatePurchase(beneficiary, daiAmount);
 
         // Transfer DAI
-        require(dai.transferFrom(_msgSender(), address(this), daiAmount), "WarehouseCrowdsale: DAI transfer failed");
+        if (!(dai.transferFrom(_msgSender(), address(this), daiAmount))) revert WarehouseCrowdsale_dai_transfer_failed();
 
         // Calculate token amount to be created
         uint256 tokens = _getTokenAmount(daiAmount);
@@ -297,13 +318,13 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
      * @param daiAmount Value in DAI involved in the purchase
      */
     function _preValidatePurchase(address beneficiary, uint256 daiAmount) internal view {
-        require(isOpen(), "WarehouseCrowdsale: not open");
+        if(!isOpen()) revert WarehouseCrowdsale_not_open();
         if (_siblings.length > 0) {
-            require(!siblingGoalReached(), "WarehouseCrowdsale: A different land use for this warehouse has reached its goal");
+            if(siblingGoalReached()) revert WarehouseCrowdsale_different_goal_reached();
         }
-        require(beneficiary != address(0), "Crowdsale: beneficiary is the zero address");
-        require(daiAmount != 0, "Crowdsale: daiAmount is 0");
-        require(daiRaised() + daiAmount <= _goal, "WarehouseCrowdsale: goal exceeded");
+        if(beneficiary == address(0)) revert WarehouseCrowdsale_beneficiary_zero_address();
+        if(daiAmount == 0) revert WarehouseCrowdsale_dai_is_zero();
+        if(!(daiRaised() + daiAmount <= _goal)) revert WarehouseCrowdsale_goal_exceeded();
         this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
     }
 
@@ -371,7 +392,7 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
 
     function claimRefund() public {
         address payee = _msgSender();
-        require(refundAllowed(payee), "WarehouseCrowdsale: Refund not allowed");
+        if(!refundAllowed(payee)) revert WarehouseCrowdsale_refund_not_allowed();
 
         // Burn tokens using destroyFrom() implemented in WarehouseToken
         _token.destroyFrom(payee, _token.balanceOf(payee));
@@ -386,7 +407,7 @@ contract WarehouseCrowdsale is Context, ReentrancyGuard {
      * @dev Sends accumulated funds to the crowdsale beneficiary (_wallet).
      */
     function beneficiaryWithdraw() public {
-        require(goalReached(), "WarehouseCrowdsale: beneficiary can only withdraw after goal is reached");
+        if(!goalReached()) revert WarehouseCrowdsale_goal_not_reached();
         dai.transfer(_wallet, dai.balanceOf(address(this)));
     }
 

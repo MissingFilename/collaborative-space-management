@@ -3,11 +3,6 @@ pragma solidity ^0.8.0;
 
 import "./WarehouseToken.sol";
 import "./WarehouseCrowdsale.sol";
-import "./factory/WarehouseFactory.sol";
-
-error Wareblock_not_owner();
-error Wareblock_supplies_not_equal_goals();
-error Wareblock_supply_not_divisible_by_goal();
 
 // Main contract
 // This is the contract factory which manages all Warehouse tokens
@@ -17,7 +12,9 @@ contract Wareblock {
   // converted to through a decentralized exchange (dex)
   // It may be any ERC20 token, preferrably a stablecoin.
   // Our platform uses DAI.
+  address public daiAddress;
 
+  address public routerAddress;
   // Note: Depending on whether the master contract will further manage
   // warehouse tokens/crowdsales after they are created, it might not be
   // necessary to store the addresses at all, since we may retrieve them
@@ -27,8 +24,6 @@ contract Wareblock {
     address payable[] warehouseCrowdsales;
   }
   Warehouse[] private warehouses;
-
-  WarehouseFactory factory;
 
   // Frontend: This struct will be used as an aggregator of information
   // about a warehouse and its token and crowdsale contracts.
@@ -56,11 +51,12 @@ contract Wareblock {
 
   constructor(address _daiAddress, address _routerAddress) {
     owner = msg.sender;
-    factory = new WarehouseFactory(_daiAddress, _routerAddress);
+    daiAddress = _daiAddress;
+    routerAddress = _routerAddress;
   }
 
   modifier onlyOwner() {
-    if(owner != msg.sender) revert Wareblock_not_owner();
+    require(owner == msg.sender, "You are not the owner of the Wareblock contract");
     _;
   }
 
@@ -75,18 +71,20 @@ contract Wareblock {
     address payable _wallet,
     uint _duration
   ) public onlyOwner {
-    if (_totalSupplies.length != _goals.length) revert Wareblock_supplies_not_equal_goals();
-    
+    require(_totalSupplies.length == _goals.length, "The number of total supplies does not match the number of goals");
     address payable[] memory crowdsales = new address payable[](_goals.length);
     address[] memory tokens = new address [](_goals.length);
-
     for (uint i = 0; i < _goals.length; i++) {
-        if(!(_totalSupplies[i] % _goals[i] == 0)) revert Wareblock_supply_not_divisible_by_goal();
-        
-        (address token, address crowdsale) = factory.createBoth(_name, _symbol, _totalSupplies[i], _tokenURI, _wallet, _goals[i], block.timestamp + _duration);
+        require(_totalSupplies[i] % _goals[i] == 0, "Total supply is not divisible by goal");
+        WarehouseToken wt = new WarehouseToken(_name, _symbol, _totalSupplies[i], _tokenURI);
+        WarehouseCrowdsale wc = new WarehouseCrowdsale(_totalSupplies[i] / _goals[i], _wallet, wt, daiAddress, _goals[i], block.timestamp + _duration, routerAddress);
+        wt.setCrowdsaleAddress(address(wc));
+        crowdsales[i] = payable(wc);
+        tokens[i] = address(wt);
 
-        crowdsales[i] = payable(crowdsale);
-        tokens[i] = token;
+        // Give the total (minted) supply to the WarehouseCrowdsale
+        // contract so that it may sell it to investors
+        wt.transfer(address(wc), _totalSupplies[i]);
     }
 
     Warehouse memory warehouse;
