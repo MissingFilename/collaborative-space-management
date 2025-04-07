@@ -32,7 +32,16 @@ To
     import "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
 ```
 
-3. Upon compiling the _Wareblock_ contract,  
+3. Gas cost and Bytecode size improvements:
+Upon compiling the _Wareblock_ contract we received an error, that the contract bytecode is too large to deploy (twice the limit, which is ~25kB). So we had to make some changes to imporove contract size and gas costs.
+
+All `require` statements have been transformed to
+```solidity
+    if(<statement>) revert Custom_error();
+```
+This is because the `string` parameter in `require` statements is too inefficient to store. Allthough this did not have much of an effect.
+
+By some experimenting, we discovered that the _Wareblock_ contract contains a large number of contract deployments which have a great toll, both in bytecode size and in gas costs. So we use a contract factory. Also the two factories (one for the _WarehouseCrowdsale_ and one for the _WarehouseToken_) are libraries and not contracts. This means that they are compiled and deployed independantly which greatly improves the Bytecode size. 
 
 ## Implementation
 
@@ -49,8 +58,19 @@ To
 1. Created a _MockDai_ and a _MockV2RourerV2_ to use for testing.
 
 ### __/deploy__
-__00-deploy.js__ is used for deploying mocks in case we are using a hardhat network or a local network.
+_Description:_ Contains the code for contract deployment.
+
+1. __00-deploy.js__ is used for deploying mocks in case we are using a hardhat network or a local network.
+2. __01-deploy.js__ is used to deploy the two libraries used in the _Wareblock_ contract and then the contract itself.
 
 ### __/scripts__
+_Description:_ Contains the extra code we might want to run.
 
 ### __/test__
+_Description:_ Contains the tests we are to perform.
+
+#### Unit tests
+_Description:_ The tests we are going to perform locally, bit-by-bit to see if parts work.
+
+#### Staging tests
+_Description:_ The tests we are going to perform on a testnet.

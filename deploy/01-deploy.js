@@ -21,10 +21,24 @@ module.exports = async ({getNamedAccounts, deployments}) => {
     log(daiAddress);
     log(routerAddress);
 
+    const tokenFactoryLibrary = await deploy ("TokenFactory", {
+        from: deployer,
+        log: true
+    });
+
+    const CrowdsaleFactoryLibrary = await deploy("CrowdsaleFactory", {
+        from: deployer,
+        log: true
+    });
+
     const Wareblock = await deploy("Wareblock", {
         from: deployer,
         args: [daiAddress, routerAddress],
         log: true,
+        libraries: {
+            TokenFactory: tokenFactoryLibrary.address,
+            CrowdsaleFactory: CrowdsaleFactoryLibrary.address,
+        },
         blockConfirmations: network.config.blockConfirmations || 1,
     });
 
