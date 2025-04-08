@@ -51,6 +51,9 @@ By some experimenting, we discovered that the _Wareblock_ contract contains a la
 3. The _Timelock_ needs to be implemented in a separate file, __WarehouseTimelock.sol__.
 
 ### Real Estate Contract
+1. One of the bigger changes in the _realEstate_ contract is the removal of shares and addition of a _WarehouseToken_.
+2. The constructor needs to be modified. On contract creation, stakeholders would already have bought their share, so we will use the constructor to add them to the real estate contract.
+3. We also had to remove the main property owner since we dont need a clear owner. So the mainPropertyOwner functions will be handled by the property manager.
 
 ## Testing
 

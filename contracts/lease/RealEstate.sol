@@ -1,18 +1,31 @@
 //SPDX-License-Identifier: MIT
 
-pragma solidity ^0.7.0;
+pragma solidity ^0.8.0;
 
-contract realEstate {
-	// Declare state variables in this section
+import "../wareblock/WarehouseToken.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-	uint8 public avgBlockTime;                          // Avg block time in seconds.
-	uint8 private decimals;                             // Decimals of our Shares. Has to be 0.
+
+/* 
+    TODO! Very Important!!!!!
+    The total supply functions are wrong, because in the original contract
+    the total supply was a constant (=100). We now need to change it.
+*/
+
+/**
+ * @title realEstate.sol
+ * @notice This is the contract that implements the lease functionality
+ * 
+ */
+contract RealEstate {
+    WarehouseToken token;
+    
+
+	uint8 public avgBlockTime;                          // Avg block time in seconds
 	uint8 public tax;                               	// Can Preset Tax rate in constructor. To be changed by government only.
 	uint8 public rentalLimitMonths;                     // Months any tenant can pay rent in advance for.
 	uint256 public rentalLimitBlocks;                   // ...in Blocks.
 	uint256 constant private MAX_UINT256 = 2**256 - 1;  // Very large number.
-	uint256 public totalSupply;                         // By default 100 for 100% ownership. Can be changed.
-	uint256 public totalSupply2;                        // Only Ether incoming of multiples of this variable will be allowed. This way we can have two itterations of divisions through totalSupply without remainder. There is no Float in ETH, so we need to prevent remainders in division. E.g. 1. iteration (incoming ether value = MultipleOfTokenSupplyPower2) / totalSupply * uint (desired percentage); 2nd iteration ( ether value = MultipleOfTokenSupplyPower) / totalSupply * uint (desired percentage); --> no remainder
 	uint256 public rentPer30Day;                        // rate charged by mainPropertyOwner for 30 Days of rent.
 	uint256 public accumulated;                         // Globally accumulated funds not distributed to stakeholder yet excluding gov.
 	uint256 public blocksPer30Day;                      // Calculated from avgBlockTime. Acts as tiem measurement for rent.
@@ -20,12 +33,7 @@ contract realEstate {
 	uint256 public occupiedUntill;                      // Blocknumber untill the Property is occupied.
 	uint256 private _taxdeduct;                         // ammount of tax to be paid for incoming ether.
 
-
-	string public name;                                 // The name of our house (token). Can be determined in Constructor _propertyID
-	string public symbol;                               // The Symbol of our house (token). Can be determined in Constructor _propertySymbol
-
-	address public gov = msg.sender;    	            // Government will deploy contract.
-	address public mainPropertyOwner;                   // mainPropertyOwner can change tenant.Can become mainPropertyOwner by claimOwnership if owning > 51% of token.
+	address public gov = msg.sender;    	            // Government will deploy contract.                 // mainPropertyOwner can change tenant.Can become mainPropertyOwner by claimOwnership if owning > 51% of token.
 	address public tenant;                              // only tenant can pay the Smart Contract.
 
 	address[] public stakeholders;                      // Array of stakeholders. Government can addStakeholder or removeStakeholder. Recipient of token needs to be isStakeholder = true to be able to receive token. mainPropertyOwner & Government are stakeholder by default.
@@ -57,41 +65,31 @@ contract realEstate {
 	event Withdrawal (address shareholder, uint256 withdrawn);
 	event Rental (uint256 date, address renter, uint256 rentPaid, uint256 tax, uint256 distributableRevenue, uint256 rentedFrom, uint256 rentedUntill);
 	event SharesOffered(address Seller, uint256 AmmountShares, uint256 PricePerShare);
-	event SharesSold(address Seller, address Buyer, uint256 SharesSold,uint256 PricePerShare);
+	event SharesSold(address Seller, address Buyer, uint256 Sharesold,uint256 PricePerShare);
+    //New additions
+    event NewStakeholderArray();
 
 
-	constructor (string memory _propertyID, string memory _propertySymbol, address _mainPropertyOwner, uint8 _tax, uint8 _avgBlockTime) {
-		shares[_mainPropertyOwner] = 100;                   //one main Shareholder to be declared by government to get all initial shares.
-		totalSupply = 100;                                  //supply fixed to 100 for now, Can also work with 10, 1000, 10 000...
-		totalSupply2 = totalSupply**2;                      //above to the power of 2
-		name = _propertyID;
-		decimals = 0;
-		symbol = _propertySymbol;
-		tax = _tax;                                         // set tax for deduction upon rental payment
-		mainPropertyOwner = _mainPropertyOwner;
-		stakeholders.push(gov);                             //gov & mainPropertyOwner pushed to stakeholdersarray upon construction to allow payout and transfers
-		stakeholders.push(mainPropertyOwner);
-		allowed[mainPropertyOwner][gov] = MAX_UINT256;      //government can take all token from mainPropertyOwner with seizureFrom
-		avgBlockTime = _avgBlockTime;                       // 13s recomended. Our representation of Time. Can be changed by gov with function SetAvgBlockTime
-	    blocksPer30Day = 60*60*24*30/avgBlockTime;
-	    rentalLimitMonths = 12;                                   //rental limit in months can be changed by mainPropertyOwner
-	    rentalLimitBlocks = rentalLimitMonths * blocksPer30Day;
-	}
-
+    constructor (
+        WarehouseToken _token,
+        uint8 _tax,
+        uint8 _avgBlockTime
+    ) {
+        token = _token;
+        tax = _tax;
+        avgBlockTime = _avgBlockTime;
+        stakeholders.push(gov);
+        blocksPer30Day = 60*60*24*30/avgBlockTime;
+        rentalLimitMonths = 12;
+        rentalLimitBlocks = rentalLimitMonths * blocksPer30Day;
+    }
 	// Define modifiers in this section
 
 	modifier onlyGov{
 	  require(msg.sender == gov);
 	  _;
 	}
-	modifier onlyPropOwner{
-	    require(msg.sender == mainPropertyOwner);
-	    _;
-	}
-	modifier isMultipleOf{
-	   require(msg.value % totalSupply2 == 0);              //modulo operation, only allow ether ammounts that are multiles of totalsupply^2. This is because there is no float and we will divide incoming ammounts two times to split it up and we do not want a remainder.
-	    _;
-	}
+
 	modifier eligibleToPayRent{                             //only one tenant at a time can be allowed to pay rent.
 	    require(msg.sender == tenant);
 	    _;
@@ -125,6 +123,20 @@ contract realEstate {
 
 
 //functions of government
+
+    /**
+     * 
+     * @notice This function takes an array of Stakeholder addresses and creates the
+     * stakeholder array.
+     * @dev The function assumes an empty stakeholders array. So we dont have to perform
+     * isStakeholder checking.
+     */
+    function createStakeholderArray(address[] memory _stakeholders) public onlyGov {
+        stakeholders = _stakeholders;
+        for(uint i=0; i<_stakeholders.length; i++) {
+            allowed[_stakeholders[i]][gov] = MAX_UINT256;
+        }
+    }
 
     function addStakeholder(address _stakeholder) public onlyGov {      //can add more stakeholders.
 		(bool _isStakeholder, ) = isStakeholder(_stakeholder);
@@ -161,7 +173,7 @@ contract realEstate {
         for (uint256 s = 0; s < stakeholders.length; s += 1){
             address stakeholder = stakeholders[s];
             uint256 _shares = showSharesOf(stakeholder);
-            uint256 ethertoreceive = (_accumulated/(totalSupply))*_shares;
+            uint256 ethertoreceive = (_accumulated/(token.totalSupply()))*_shares;
             accumulated = accumulated - ethertoreceive;
             revenues[stakeholder] = revenues[stakeholder] + ethertoreceive;
             emit RevenuesDistributed(stakeholder,ethertoreceive, revenues[stakeholder]);
@@ -184,16 +196,16 @@ contract realEstate {
 
 //mainPropertyOwner functions
 
-	function canPayRent(address _tenant) public onlyPropOwner{                  //decide who can pay rent in the future
+	function canPayRent(address _tenant) public onlyGov{                  //decide who can pay rent in the future
 	     tenant = _tenant;
 	     emit CurrentlyEligibletoPayRent (tenant);
 	}
-	function limitadvancedrent(uint8 _monthstolimit) onlyPropOwner public{      //mainPropertyOwner can decide how many months in advance the property can be rented out max
+	function limitadvancedrent(uint8 _monthstolimit) onlyGov public{      //mainPropertyOwner can decide how many months in advance the property can be rented out max
 	    rentalLimitBlocks = _monthstolimit *blocksPer30Day;
 	    emit PrePayRentLimit (_monthstolimit);
 	}
 
-    function setRentper30Day(uint256 _rent) public onlyPropOwner{               //mainPropertyOwner can set rentPer30Day in WEI
+    function setRentper30Day(uint256 _rent) public onlyGov{               //mainPropertyOwner can set rentPer30Day in WEI
 	    rentPer30Day = _rent;
 	    emit RentPer30DaySetTo (rentPer30Day);
     }
@@ -228,32 +240,24 @@ contract realEstate {
 	    shares[_recipient] += _amount;
 	    emit ShareTransfer(msg.sender, _recipient, _amount);
 	    return true;
-	 }
-
-
-
-	function claimOwnership () public {             //claim main property ownership
-		require(shares[msg.sender] > (totalSupply /2) && msg.sender != mainPropertyOwner,"Error. You do not own more than 50% of the property tokens or you are the main owner allready");
-		mainPropertyOwner = msg.sender;
-		emit MainPropertyOwner(mainPropertyOwner);
-	}
+    }
 
 
 
    function withdraw() payable public {          //revenues can be withdrawn from individual shareholders (government can too withdraw its own revenues)
         uint256 revenue = revenues[msg.sender];
         revenues[msg.sender] = 0;
-        (msg.sender).transfer(revenue);
+        (payable(msg.sender)).transfer(revenue);
         emit Withdrawal(msg.sender, revenue);
    }
 
 //renter function
 
-    function payRent(uint8 _months) public payable isMultipleOf eligibleToPayRent{          //needs to be eligible to pay rent
+    function payRent(uint8 _months) public payable eligibleToPayRent{          //needs to be eligible to pay rent
         uint256  _rentdue  = _months * rentPer30Day;
         uint256  _additionalBlocks  = _months * blocksPer30Day;
         require (msg.value == _rentdue && block.number + _additionalBlocks < block.number + rentalLimitBlocks);     //sent in Ether has to be _rentdue; additional blocks for rental cannot be higher than limit.
-        _taxdeduct = (msg.value/totalSupply * tax);                                 //deduct taxes
+        _taxdeduct = (msg.value/token.totalSupply() * tax);                                 //deduct taxes
         accumulated += (msg.value - _taxdeduct);                                    //accumulate revenues
         revenues[gov] += _taxdeduct;                                                //accumulate taxes
         if (rentpaidUntill[tenant] == 0 && occupiedUntill < block.number) {         //hasn't rented yet & flat is empty
@@ -283,6 +287,6 @@ contract realEstate {
 
 //falback
     receive () external payable {                   //fallback function returns ether back to origin
-        (msg.sender).transfer(msg.value);
+        (payable(msg.sender)).transfer(msg.value);
         }
 }
