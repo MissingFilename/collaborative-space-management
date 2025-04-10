@@ -18,7 +18,7 @@ contract WarehouseToken is ERC20, ERC20Burnable, ERC20Votes, ERC20Permit {
 
     constructor(string memory _name, string memory _symbol, uint _totalSupply, string memory _tokenURI) ERC20(_name, _symbol) ERC20Permit(_name){
         tokenURI = _tokenURI;
-        _mint(msg.sender, _totalSupply);
+        _mint(msg.sender, _totalSupply * 10 ** 18);
         _owner = msg.sender;
     }
 

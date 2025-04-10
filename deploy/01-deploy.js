@@ -31,7 +31,7 @@ module.exports = async ({getNamedAccounts, deployments}) => {
         log: true
     });
 
-    const Wareblock = await deploy("Wareblock", {
+    await deploy("Wareblock", {
         from: deployer,
         args: [daiAddress, routerAddress],
         log: true,

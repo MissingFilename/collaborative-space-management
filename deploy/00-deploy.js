@@ -20,12 +20,13 @@ module.exports = async ({getNamedAccounts, deployments}) => {
 
         log(daiAddress);
 
-        await deploy("MockV2Router02", {
+        const MockV2Router = await deploy("MockV2Router02", {
             contract: "MockV2Router02",
             from: deployer,
             log: true,
             args: [daiAddress]
         });
+
 
         log("Deployed MockV2Router02.");
         log("------------------------------------------");

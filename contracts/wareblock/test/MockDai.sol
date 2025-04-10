@@ -5,7 +5,7 @@ contract MockDai {
     string public name = "Mock DAI";
     string public symbol = "mDAI";
     uint8 public decimals = 18;
-    uint256 constant public totalSupply = 500000000;
+    uint256 constant public totalSupply = 500000000 * 10 ** 18;
 
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;

@@ -6,7 +6,7 @@ import "../DaiSwapping.sol";
 contract MockV2Router02 {
     address public immutable WETH_ADDRESS;
 
-    constructor(address _weth) {
+    constructor(address _weth) payable {
         WETH_ADDRESS = _weth;
     }
 
@@ -61,7 +61,6 @@ contract MockV2Router02 {
         address tokenIn = path[0];
         address tokenOut = path[path.length - 1];
 
-        // For mock: assume 1:1 rate
         require(amountOut <= amountInMax, "Too much input required");
 
         require(
@@ -91,7 +90,7 @@ contract MockV2Router02 {
         require(block.timestamp <= deadline, "Transaction expired");
         require(path[0] == WETH_ADDRESS, "First token must be WETH");
 
-        uint amountOut = msg.value; // mock 1:1 rate
+        uint amountOut = msg.value;
 
         require(amountOut >= amountOutMin, "Slippage check failed");
 
@@ -129,7 +128,7 @@ contract MockV2Router02 {
         uint amountOut = amountIn;
         require(amountOut >= amountOutMin, "Slippage check failed");
 
-        payable(to).transfer(amountOut); // mock: sending ETH
+        payable(to).transfer(amountOut); 
 
         amounts = new uint[](path.length);
         for (uint i = 0; i < path.length; i++) {

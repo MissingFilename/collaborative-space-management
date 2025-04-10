@@ -58,16 +58,23 @@ By some experimenting, we discovered that the _Wareblock_ contract contains a la
 ## Testing
 
 ### __/contracts/wareblock/test/__
-1. Created a _MockDai_ and a _MockV2RourerV2_ to use for testing.
+1. Created a _MockDai_ and a _MockV2RourerV2_ to use for testing on a local network.
 
 ### __/deploy__
 _Description:_ Contains the code for contract deployment.
 
 1. __00-deploy.js__ is used for deploying mocks in case we are using a hardhat network or a local network.
 2. __01-deploy.js__ is used to deploy the two libraries used in the _Wareblock_ contract and then the contract itself.
+3. __02-deploy.js__ is a deploy script for a _WarehouseToken_ and a _WarehouseGovernor_ contract.
 
 ### __/scripts__
 _Description:_ Contains the extra code we might want to run.
+
+#### __WarehouseGovernor.js__
+Deploys a _WarehouseToken_ contract instance and the _WarehouseGovernor_. Creates a proposal, has two accounts vote on the proposal and proposal fails.
+
+#### __RealEstate.js__
+Deploys a _WarehouseToken_ contract instance and the _RealEstate_ contract.
 
 ### __/test__
 _Description:_ Contains the tests we are to perform.
