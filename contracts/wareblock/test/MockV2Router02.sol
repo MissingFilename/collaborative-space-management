@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "../DaiSwapping.sol";
+import "../contracts-master/contracts/DaiSwapping.sol";
 
 contract MockV2Router02 {
     address public immutable WETH_ADDRESS;

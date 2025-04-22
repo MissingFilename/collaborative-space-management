@@ -1,0 +1,4 @@
+[submodule "contracts/lease/lease"]
+	path = contracts/lease/lease
+	url = https://github.com/MissingFilename/ethereum_smart_contracts_solidity.git
+	branch = Pirmins_Branch

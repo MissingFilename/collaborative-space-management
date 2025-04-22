@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "./WarehouseToken.sol";
 import "./WarehouseCrowdsale.sol";
-import "./factory/WarehouseFactory.sol";
+import "../../factory/WarehouseFactory.sol";
 
 error Wareblock_not_owner();
 error Wareblock_supplies_not_equal_goals();
