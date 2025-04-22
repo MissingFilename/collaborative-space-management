@@ -82,5 +82,7 @@ _Description:_ Contains the tests we are to perform.
 #### Unit tests
 _Description:_ The tests we are going to perform locally, bit-by-bit to see if parts work.
 
+The included unit tests
+
 #### Staging tests
 _Description:_ The tests we are going to perform on a testnet.

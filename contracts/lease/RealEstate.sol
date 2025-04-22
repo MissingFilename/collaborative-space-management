@@ -163,7 +163,7 @@ contract RealEstate {
         uint256 _accumulated = accumulated;
         accumulated = 0;
         
-        uint256 totalSupply = token.totalSupply();
+        uint256 totalSupply = token.totalSupply() / 1e18;
         require(totalSupply > 0, "Total supply must be greater than 0");
         
         for (uint256 s = 0; s < stakeholders.length; s += 1) {
@@ -228,17 +228,11 @@ contract RealEstate {
         
         // Transfer shares (tokens) from seller to buyer
         // This will fail if the seller hasn't approved this contract to transfer their tokens
-        try token.transferFrom(_from, msg.sender, _sharesToBuy) {
+        token.transferFrom(_from, msg.sender, _sharesToBuy);
             // Update offered shares
-            sharesOffered[_from] -= _sharesToBuy;
+        sharesOffered[_from] -= _sharesToBuy;
             // Transfer payment to seller
-            _from.transfer(msg.value);
-            emit SharesSold(_from, msg.sender, _sharesToBuy, shareSellPrice[_from]);
-        } catch {
-            // If the transfer fails, refund the payment
-            payable(msg.sender).transfer(msg.value);
-            revert("Token transfer failed - check allowance");
-        }
+        _from.transfer(msg.value);
     }
 
     function withdraw() public payable {

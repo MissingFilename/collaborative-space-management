@@ -19,6 +19,11 @@ module.exports = async ({getNamedAccounts, deployments}) => {
         blockConfirmations: network.config.blockConfirmations || 1,
     });
 
+    await deploy("NothingContract", {
+        from: deployer, 
+        log: true, 
+    });
+
     log("-------------------------------------------------------");
 
 }
